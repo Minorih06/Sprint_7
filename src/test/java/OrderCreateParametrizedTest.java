@@ -1,19 +1,35 @@
 import io.qameta.allure.Step;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-
+import utilits.Order;
+import utilits.OrderApi;
 
 import java.util.stream.Stream;
 
-import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
 import static utilits.constants.Constants.*;
+import static org.apache.http.HttpStatus.*;
 
 public class OrderCreateParametrizedTest {
+
+    private static final String FIRST_NAME = "Mefodiy";
+    private static final String LAST_NAME = "Petrovich";
+    private static final String ADDRESS = "Konoha, 142 apt.";
+    private static final int METRO_STATION = 4;
+    private static final String PHONE = "+7 800 355 35 35";
+    private static final int RENT_TIME = 5;
+    private static final String DELIVERY_DATE = "2020-06-06";
+    private static final String COMMENT =  "Mefodiy, come back to Konoha";
+    private static final String[] COLOR_BLACK = {"BLACK"};
+    private static final String[] COLOR_GREY = {"GREY"};
+    private static final String[] COLOR_BLACK_AND_GREY = {"BLACK", "GREY"};
+
+    private int trackOrder;
 
     @BeforeEach
     public void setUp() {
@@ -22,9 +38,10 @@ public class OrderCreateParametrizedTest {
 
     public static Stream<Order> orderProvider() {
         return Stream.of(
-                new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT, COLOR_BLACK), //один цвет
+                new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT, COLOR_BLACK), //чёрный цвет
+                new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT, COLOR_GREY), //серый цвет
                 new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT, COLOR_BLACK_AND_GREY), //два цвета
-                new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT) //без указания цвета
+                new Order(FIRST_NAME, LAST_NAME, ADDRESS, METRO_STATION, PHONE, RENT_TIME, DELIVERY_DATE, COMMENT)//без указания цвета
         );
     }
 
@@ -32,17 +49,11 @@ public class OrderCreateParametrizedTest {
     @MethodSource("orderProvider")
     @DisplayName("Создание заказа")
     public void createOrderTest(Order order) {
-        Response response = createOrder(order);
-        checkedStatusResponse(response, 201);
+        OrderApi orderApi = new OrderApi();
+        Response response = orderApi.createOrder(order);
+        checkedStatusResponse(response, SC_CREATED);
         checkedBodyResponse(response);
-        int trackOrder = response.jsonPath().getInt("track");
-        cancelOrder(trackOrder);
-    }
-
-
-    @Step("Создание заказа")
-    public Response createOrder(Order order) {
-        return given().header("Content-type", "application/json").and().body(order).when().post(CREATE_ORDER);
+        trackOrder = response.jsonPath().getInt("track");
     }
 
     @Step("Проверка статуса ответа")
@@ -55,10 +66,9 @@ public class OrderCreateParametrizedTest {
         response.then().assertThat().body("track", notNullValue());
     }
 
-    @Step("Отмена заказа")
-    public void cancelOrder(int trackOrder) {
-        String json = String.format("\"track\": %s", trackOrder);
-        given().header("Content-type", "application/json").and().body(json).when().put(CANCEL_ORDER);
+    @AfterEach
+    public void cancelOrder() {
+        OrderApi orderApi = new OrderApi();
+        orderApi.cancelOrderRequest(trackOrder);
     }
-
 }

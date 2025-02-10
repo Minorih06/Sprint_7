@@ -1,3 +1,4 @@
+import com.github.javafaker.Faker;
 import io.qameta.allure.Description;
 import io.qameta.allure.Step;
 import io.restassured.RestAssured;
@@ -6,13 +7,27 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import utilits.Courier;
+import utilits.CourierApi;
+
 
 import static io.restassured.RestAssured.*;
 import static org.hamcrest.Matchers.equalTo;
+import static utilits.CourierApi.CREATE_COURIER;
 import static utilits.constants.Constants.*;
+import static org.apache.http.HttpStatus.*;
 
 public class CourierCreateTest {
     private boolean shouldDeleteCourier = true;
+    private String login;
+    private String password;
+
+    Faker faker = new Faker();
+    private final String loginCourier = faker.name().username();
+    private final String passwordCourier = faker.internet().password();
+    private final String firstNameCourier = faker.name().firstName();
+
+    CourierApi courierApi = new CourierApi();
 
     @BeforeEach
     public void setUp() {
@@ -20,63 +35,49 @@ public class CourierCreateTest {
     }
 
     @Test
-    @DisplayName("Курьера можно создать")
-    @Description("При заполнении всех полей валидными значениями получаем 201")
+    @DisplayName("Курьера можно создать / Успешный запрос возвращает ok: true")
+    @Description("При заполнении всех полей валидными значениями получаем 201 и в теле ok: true")
     public void courierCanBeCreatedTest() {
-        Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER, FIRST_NAME_COURIER);
-        Response response = sendPostRequest(courier, CREATE_COURIER);
-        checkedStatusResponse(response, 201);
+        Courier courier = new Courier(loginCourier, passwordCourier, firstNameCourier);
+        Response response = courierApi.createCourier(courier);
+        checkedStatusResponse(response, SC_CREATED);
+        checkedBodyResponse(response, "{\"ok\":true}");
+        login = loginCourier;
+        password = passwordCourier;
     }
 
     @Test
-    @DisplayName("Нельзя создать двух одинаковых курьеров")
+    @DisplayName("Нельзя создать двух одинаковых курьеров / Если создать пользователя с логином, который уже есть, возвращается ошибка.")
     public void impossibleToCreateTwoIdenticalCouriersTest() {
-        Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER, FIRST_NAME_COURIER);
-        sendPostRequest(courier, CREATE_COURIER);
-        Response response = sendPostRequest(courier, CREATE_COURIER);
-        checkedStatusResponse(response, 409);
+        Courier courier = new Courier(loginCourier, passwordCourier, firstNameCourier);
+        courierApi.createCourier(courier);
+        Response response = courierApi.createCourier(courier);
+        checkedStatusResponse(response, SC_CONFLICT);
+        checkedBodyResponse(response, "{\"message\":\"Этот логин уже используется\"}");
+        login = loginCourier;
+        password = passwordCourier;
     }
 
     @Test
     @DisplayName("Чтобы создать курьера, нужно передать в ручку все обязательные поля;")
     @Description("Проверяем, что без поля firstName в код ответа будет 201")
     public void createCourierWithoutPasswordFieldTest() {
-        Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER);
-        Response response = sendPostRequest(courier, CREATE_COURIER);
-        checkedStatusResponse(response, 201);
-    }
-
-    @Test
-    @DisplayName("Успешный запрос возвращает ok: true")
-    public void successfulRequestReturnsValidBodyTest() {
-        Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER, FIRST_NAME_COURIER);
-        Response response = sendPostRequest(courier, CREATE_COURIER);
-        checkedBodyResponse(response, "{\"ok\":true}");
+        Courier courier = new Courier(loginCourier, passwordCourier);
+        Response response = courierApi.createCourier(courier);
+        checkedStatusResponse(response, SC_CREATED);
+        login = loginCourier;
+        password = passwordCourier;
     }
 
     @Test
     @DisplayName("Если одного из полей нет, запрос возвращает ошибку 400")
     @Description("Проверяем, что при отправке запроса без поля password получаем 400 Bad Request")
-    public void ifOneOfTheFieldsIsMissingReturnsErrorTest() {
+    public void requestWithoutPasswordFieldTest() {
         shouldDeleteCourier = false;
-        String json = String.format("{\"login\": \"%s\", \"firstName\":\"%s\"}", LOGIN_COURIER, FIRST_NAME_COURIER);
+        String json = String.format("{\"login\": \"%s\", \"firstName\":\"%s\"}", loginCourier, firstNameCourier);
         Response response = given().header("Content-type", "application/json").and().body(json).when().post(CREATE_COURIER);
-        checkedStatusResponse(response, 400);
-    }
-
-    @Test
-    @DisplayName("Если создать пользователя с логином, который уже есть, возвращается ошибка.")
-    @Description("Текст ошибки message: Этот логин уже используется")
-    public void errorIsReturnedIfCreateUserWithALoginThatAlreadyExistTest() {
-        Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER, FIRST_NAME_COURIER);
-        sendPostRequest(courier, CREATE_COURIER);
-        Response response = sendPostRequest(courier, CREATE_COURIER);
-        checkedBodyResponse(response, "{\"message\":\"Этот логин уже используется\"}");
-    }
-
-    @Step("Отправка POST запроса")
-    public Response sendPostRequest(Courier courier, String handle) {
-        return given().header("Content-type", "application/json").and().body(courier).when().post(handle);
+        checkedStatusResponse(response, SC_BAD_REQUEST);
+        checkedBodyResponse(response, "{\"message\":\"Недостаточно данных для создания учетной записи\"}");
     }
 
     @Step("Проверка статуса ответа")
@@ -89,18 +90,13 @@ public class CourierCreateTest {
         response.then().body(equalTo(responseBody));
     }
 
-    @Step("Удаление курьера")
-    public void deleteCourierRequest(int courierId) {
-        given().pathParam("id", courierId).when().delete(DELETE_COURIER);
-    }
-
     @AfterEach
     public void deleteCourier() {
         if (shouldDeleteCourier) {
-            Courier courier = new Courier(LOGIN_COURIER, PASSWORD_COURIER);
-            Response response = sendPostRequest(courier, AUTHORIZATION_COURIER);
+            Courier courier = new Courier(login, password);
+            Response response = courierApi.authorizationCouriers(courier);
             int courierId = response.jsonPath().getInt("id");
-            deleteCourierRequest(courierId);
+            courierApi.deleteCourierRequest(courierId);
         }
     }
 }

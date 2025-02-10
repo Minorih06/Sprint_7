@@ -4,8 +4,8 @@ import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import utilits.OrderApi;
 
-import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.notNullValue;
 import static utilits.constants.Constants.*;
 
@@ -18,14 +18,11 @@ public class OrdersListReturnTest {
     @Test
     @DisplayName("Тело ответа возвращается список заказов")
     public void ordersListReturnIsNotNullTest() {
-        Response response = orderListRequest();
+        OrderApi orderApi = new OrderApi();
+        Response response = orderApi.orderListRequest();
         checkedOrdersIsNotNull(response);
     }
 
-    @Step("Отправляем Get запрос на получение списка заказов без передачи параметров")
-    public Response orderListRequest() {
-        return given().get(GET_ORDER_LIST);
-    }
 
     @Step("Проверяем получения списка заказов")
     public void checkedOrdersIsNotNull(Response response) {
