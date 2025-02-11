@@ -4,6 +4,7 @@ import io.qameta.allure.Step;
 import io.restassured.response.Response;
 
 import static io.restassured.RestAssured.given;
+import static org.apache.http.HttpStatus.*;
 
 public class OrderApi {
     public static final String CREATE_ORDER = "/api/v1/orders";
@@ -17,8 +18,8 @@ public class OrderApi {
 
     @Step("Отмена заказа")
     public void cancelOrderRequest(int trackOrder) {
-        String json = String.format("\"track\": %s", trackOrder);
-        given().header("Content-type", "application/json").and().body(json).when().put(CANCEL_ORDER);
+        Response response = given().header("Content-type", "application/json").and().queryParam("track", trackOrder).when().put(CANCEL_ORDER);
+        response.then().statusCode(SC_OK);
     }
 
     @Step("Отправляем Get запрос на получение списка заказов без передачи параметров")
